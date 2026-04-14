@@ -1,0 +1,49 @@
+"""
+Example: How to update detector.py to use your custom trained model
+====================================================================
+
+After training completes, your model will be saved at:
+    /Users/souravdey/Projects/person-detector/models/ppe_detector/weights/best.pt
+
+Replace lines 32-48 in detector.py with the code below:
+"""
+
+# OPTION 1: Use ONLY your custom model
+# =====================================
+# Replace lines 32-48 in detector.py with:
+
+# PPE Detection Model: Custom trained model
+print("Loading custom PPE detection model...")
+CUSTOM_MODEL_PATH = "/Users/souravdey/Projects/person-detector/models/ppe_detector/weights/best.pt"
+self.ppe_model1 = YOLO(CUSTOM_MODEL_PATH)
+
+# Disable second model (or keep it for additional coverage)
+self.ppe_model2 = None  # Set to None to disable
+
+
+# OPTION 2: Use custom model + keep original as backup
+# =====================================================
+# Replace lines 32-48 in detector.py with:
+
+import os
+
+# PPE Detection Model 1: Your custom trained model
+CUSTOM_MODEL_PATH = "/Users/souravdey/Projects/person-detector/models/ppe_detector/weights/best.pt"
+if os.path.exists(CUSTOM_MODEL_PATH):
+    print("Loading custom PPE detection model...")
+    self.ppe_model1 = YOLO(CUSTOM_MODEL_PATH)
+else:
+    print("Custom model not found, using default...")
+    ppe_model1_path = hf_hub_download(
+        repo_id="keremberke/yolov8m-protective-equipment-detection",
+        filename="best.pt"
+    )
+    self.ppe_model1 = YOLO(ppe_model1_path)
+
+# PPE Detection Model 2: Keep original for additional coverage
+print("Loading PPE detection model 2 (Tanishjain9)...")
+ppe_model2_path = hf_hub_download(
+    repo_id="Tanishjain9/yolov8n-ppe-detection-6classes",
+    filename="best.pt"
+)
+self.ppe_model2 = YOLO(ppe_model2_path)

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIH Full Telemetry</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { 
+            margin: 0; overflow: hidden; background-color: #050505; 
+            font-family: 'Courier New', monospace; color: #00ffcc;
+            display: flex; height: 100vh; width: 100vw;
+        }
+
+        /* --- LEFT PANEL (3D) --- */
+        #left-panel {
+            flex: 1; position: relative; border-right: 2px solid #333;
+            height: 100%; overflow: hidden;
+        }
+        #three-container { width: 100%; height: 100%; }
+        #overlay {
+            position: absolute; top: 10px; left: 10px;
+            background: rgba(0, 20, 0, 0.85); padding: 10px; 
+            border: 1px solid #00ffcc; width: 220px;
+            box-shadow: 0 0 10px #00ffcc; font-size: 12px; pointer-events: none;
+        }
+        .data-row { display: flex; justify-content: space-between; margin-bottom: 3px; }
+        .val { font-weight: bold; color: #fff; }
+        #status-light {
+            position: absolute; top: 10px; right: 10px; width: 12px; height: 12px; 
+            border-radius: 50%; background: #333; box-shadow: 0 0 5px #000;
+        }
+
+        /* --- RIGHT PANEL (GRAPHS) --- */
+        #right-panel {
+            flex: 1; 
+            display: flex; flex-direction: column;
+            padding: 10px; background-color: #0a0a0a;
+            height: 100vh; 
+            overflow-y: auto; /* SCROLLABLE if graphs don't fit */
+        }
+        
+        /* Scrollbar styling */
+        #right-panel::-webkit-scrollbar { width: 8px; }
+        #right-panel::-webkit-scrollbar-track { background: #111; }
+        #right-panel::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+
+        .chart-wrapper {
+            flex-shrink: 0; /* Don't squash charts */
+            height: 180px; /* Fixed height per chart */
+            background: #111; border: 1px solid #333; border-radius: 4px;
+            margin-bottom: 10px; padding: 5px;
+            display: flex; flex-direction: column;
+        }
+        .chart-wrapper canvas { flex: 1; }
+        h2 { margin: 2px 0 5px 0; font-size: 13px; color: #888; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <!-- LEFT: 3D VIS -->
+    <div id="left-panel">
+        <div id="overlay">
+            <h1 style="font-size: 14px; margin: 0 0 5px 0; border-bottom: 1px solid #004433;">MISSION TELEMETRY</h1>
+            <div class="data-row"><span>POS X:</span> <span id="px" class="val">0.00</span></div>
+            <div class="data-row"><span>POS Y:</span> <span id="py" class="val">0.00</span></div>
+            <div class="data-row"><span>POS Z:</span> <span id="pz" class="val">0.00</span></div>
+            <hr style="border-color: #004433; margin: 5px 0;">
+            <div class="data-row"><span>Altitude:</span> <span id="alt-txt" class="val">0.0 m</span></div>
+            <div class="data-row"><span>Pressure:</span> <span id="pres-txt" class="val">0 hPa</span></div>
+            <div class="data-row"><span>Methane:</span> <span id="gas-txt" class="val">0 ppm</span></div>
+            <div class="data-row"><span>Helmet:</span> <span id="helmet-txt" class="val">--</span></div>
+        </div>
+        <div id="status-light"></div>
+        <div id="three-container"></div>
+    </div>
+
+    <!-- RIGHT: GRAPHS -->
+    <div id="right-panel">
+        <div class="chart-wrapper">
+            <h2>ACCELEROMETER (g)</h2>
+            <div style="flex:1; position:relative; min-height:0;"><canvas id="accChart"></canvas></div>
+        </div>
+        <div class="chart-wrapper">
+            <h2>GYROSCOPE (dps)</h2>
+            <div style="flex:1; position:relative; min-height:0;"><canvas id="gyroChart"></canvas></div>
+        </div>
+        <div class="chart-wrapper">
+            <h2>ALTITUDE (m)</h2>
+            <div style="flex:1; position:relative; min-height:0;"><canvas id="altChart"></canvas></div>
+        </div>
+        <div class="chart-wrapper">
+            <h2>DELTA ALTITUDE (m)</h2>
+            <div style="flex:1; position:relative; min-height:0;"><canvas id="deltaChart"></canvas></div>
+        </div>
+        <div class="chart-wrapper">
+            <h2>PRESSURE (hPa)</h2>
+            <div style="flex:1; position:relative; min-height:0;"><canvas id="presChart"></canvas></div>
+        </div>
+    </div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- THREE.JS SETUP ---
+        const container = document.getElementById('three-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050505);
+        scene.fog = new THREE.FogExp2(0x050505, 0.04);
+        const camera = new THREE.PerspectiveCamera(50, container.clientWidth/container.clientHeight, 0.1, 100);
+        camera.position.set(6, 4, 6);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+        const pl = new THREE.PointLight(0x00ffcc, 1, 20); pl.position.set(0,5,0); scene.add(pl);
+        
+        // Cube & Grid
+        const boxSize = 5;
+        const line = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(boxSize, boxSize, boxSize)), new THREE.LineBasicMaterial({ color: 0x333333 }));
+        scene.add(line);
+        const grid = new THREE.GridHelper(boxSize, 10, 0x004433, 0x111111); grid.position.y = -boxSize/2; scene.add(grid);
+        
+        // Point & Trail
+        const point = new THREE.Mesh(new THREE.SphereGeometry(0.15,16,16), new THREE.MeshStandardMaterial({ color: 0x00ffcc, emissive: 0x004433, roughness: 0.1 }));
+        scene.add(point);
+        const trailSize=40; const trailPos = new Float32Array(trailSize*3);
+        const trail = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: 0x00ffcc, size: 0.05, transparent:true, opacity:0.6 }));
+        trail.geometry.setAttribute('position', new THREE.BufferAttribute(trailPos, 3)); scene.add(trail);
+
+        // Physics
+        let pos = new THREE.Vector3(), vel = new THREE.Vector3(), targetQuat = new THREE.Quaternion();
+        const gravity = 1.0;
+
+        // --- CHART.JS SETUP ---
+        const maxPts = 50;
+        const labels = Array(maxPts).fill('');
+        const chartOpts = {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            plugins: { legend: { display: true, labels: { color: '#aaa', boxWidth: 10 } } },
+            scales: { x: { display: false }, y: { grid: { color: '#222' }, ticks: { color: '#888', font:{size:10} } } }
+        };
+
+        const createChart = (id, datasets) => new Chart(document.getElementById(id), { type: 'line', data: { labels, datasets }, options: chartOpts });
+
+        const accChart = createChart('accChart', [
+            { label: 'X', data: [], borderColor: '#ff4444', borderWidth: 1, pointRadius: 0 },
+            { label: 'Y', data: [], borderColor: '#44ff44', borderWidth: 1, pointRadius: 0 },
+            { label: 'Z', data: [], borderColor: '#4444ff', borderWidth: 1, pointRadius: 0 }
+        ]);
+        const gyroChart = createChart('gyroChart', [
+            { label: 'X', data: [], borderColor: '#ff8800', borderWidth: 1, pointRadius: 0 },
+            { label: 'Y', data: [], borderColor: '#00ffff', borderWidth: 1, pointRadius: 0 },
+            { label: 'Z', data: [], borderColor: '#ff00ff', borderWidth: 1, pointRadius: 0 }
+        ]);
+        const altChart = createChart('altChart', [{ label: 'Altitude', data: [], borderColor: '#00ccff', borderWidth: 1, pointRadius: 0, fill: true, backgroundColor: 'rgba(0,204,255,0.1)' }]);
+        const deltaChart = createChart('deltaChart', [{ label: 'Delta', data: [], borderColor: '#cc00ff', borderWidth: 1, pointRadius: 0 }]);
+        const presChart = createChart('presChart', [{ label: 'Pressure', data: [], borderColor: '#ffff00', borderWidth: 1, pointRadius: 0 }]);
+
+        function updateGraph(chart, values) {
+            values.forEach((v, i) => {
+                chart.data.datasets[i].data.push(v);
+                if(chart.data.datasets[i].data.length > maxPts) chart.data.datasets[i].data.shift();
+            });
+            chart.update();
+        }
+
+        // --- DATA LOOP ---
+        const elPx=document.getElementById('px'), elPy=document.getElementById('py'), elPz=document.getElementById('pz');
+        const elAlt=document.getElementById('alt-txt'), elPres=document.getElementById('pres-txt'), elGas=document.getElementById('gas-txt'), elHelmet=document.getElementById('helmet-txt');
+        const elStatus=document.getElementById('status-light');
+
+        async function fetchData() {
+            try {
+                const res = await fetch("http://localhost:8000/data");
+                const data = await res.json();
+                if(data.status !== "connected") return;
+
+                const { x_g: ax, y_g: ay, z_g: az } = data.accel;
+                const { x_dps: gx, y_dps: gy, z_dps: gz } = data.gyro;
+                const { altitude_m, delta_alt_m, pressure_hpa } = data.env;
+
+                // Physics
+                const pitch = Math.atan2(ay, Math.sqrt(ax*ax + az*az));
+                const roll = Math.atan2(-ax, Math.sqrt(ay*ay + az*az));
+                targetQuat.setFromEuler(new THREE.Euler(pitch, 0, roll));
+
+                // Dead Reckoning (Movement)
+                let accX = -ax, accY = az - gravity, accZ = ay;
+                if(Math.abs(accX)<0.15) accX=0; if(Math.abs(accY)<0.15) accY=0; if(Math.abs(accZ)<0.15) accZ=0;
+                vel.add(new THREE.Vector3(accX, accY, accZ).multiplyScalar(0.08));
+                pos.add(vel); vel.multiplyScalar(0.92); pos.lerp(new THREE.Vector3(0,0,0), 0.01);
+                
+                // Constraints
+                const L = 2.3;
+                if(pos.x>L||pos.x<-L) { pos.x=Math.sign(pos.x)*L; vel.x*=-0.5; }
+                if(pos.y>L||pos.y<-L) { pos.y=Math.sign(pos.y)*L; vel.y*=-0.5; }
+                if(pos.z>L||pos.z<-L) { pos.z=Math.sign(pos.z)*L; vel.z*=-0.5; }
+
+                point.quaternion.slerp(targetQuat, 0.1);
+                point.position.copy(pos);
+
+                // UI Text
+                elPx.innerText=pos.x.toFixed(2); elPy.innerText=pos.y.toFixed(2); elPz.innerText=pos.z.toFixed(2);
+                elAlt.innerText=altitude_m.toFixed(1)+" m"; elPres.innerText=pressure_hpa.toFixed(1)+" hPa";
+                elGas.innerText=data.methane_ppm.toFixed(0)+" ppm";
+                elHelmet.innerText=data.fsr.is_wearing_helmet?"ON":"OFF";
+                elHelmet.style.color=data.fsr.is_wearing_helmet?"#0f0":"#888";
+                
+                let c="#333";
+                if(data.system_state==1)c="#0f0"; else if(data.system_state==2)c="#00f";
+                else if(data.system_state==3)c="#f00"; else if(data.system_state==4)c="#fa0";
+                elStatus.style.background=c; point.material.color.set(c);
+
+                // Charts
+                updateGraph(accChart, [ax, ay, az]);
+                updateGraph(gyroChart, [gx, gy, gz]);
+                updateGraph(altChart, [altitude_m]);
+                updateGraph(deltaChart, [delta_alt_m]);
+                updateGraph(presChart, [pressure_hpa]);
+
+            } catch(e){}
+        }
+        setInterval(fetchData, 50);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            // Trail update
+            const arr = trail.geometry.attributes.position.array;
+            for(let i=0; i<(trailSize-1)*3; i++) arr[i]=arr[i+3];
+            arr[(trailSize-1)*3]=pos.x; arr[(trailSize-1)*3+1]=pos.y; arr[(trailSize-1)*3+2]=pos.z;
+            trail.geometry.attributes.position.needsUpdate=true;
+            controls.update(); renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', ()=>{
+            camera.aspect=container.clientWidth/container.clientHeight; camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+    </script>
+</body>
+</html>

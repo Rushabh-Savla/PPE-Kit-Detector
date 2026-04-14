@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIH Operator Interface - Mine Safety System</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1510 50%, #0a0a0a 100%);
+            font-family: 'Share Tech Mono', monospace;
+            color: #ff6b00;
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* Loading Screen */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            transition: opacity 0.8s ease-out;
+        }
+
+        #loading-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem;
+            font-weight: 900;
+            color: #ff6b00;
+            text-transform: uppercase;
+            letter-spacing: 6px;
+            margin-bottom: 40px;
+            text-shadow: 0 0 30px rgba(255, 107, 0, 0.5);
+        }
+
+        .loading-bar-container {
+            width: 280px;
+            height: 4px;
+            background: #222;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .loading-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #ff6b00, #ffaa00);
+            width: 0%;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 20px rgba(255, 107, 0, 0.8);
+        }
+
+        .loading-text {
+            margin-top: 20px;
+            color: #666;
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+        }
+
+        /* --- LEFT PANEL (3D & HUD) --- */
+        #left-panel {
+            flex: 1;
+            position: relative;
+            border-right: 2px solid #ff6b0033;
+            height: 100%;
+            overflow: hidden;
+            background: radial-gradient(circle at center, #151210 0%, #0a0806 100%);
+        }
+
+        #three-container {
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Heads Up Display - Restyled */
+        #hud {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 10;
+            background: rgba(10, 10, 10, 0.95);
+            padding: 15px 18px;
+            border: 1px solid #333;
+            border-left: 3px solid #ff6b00;
+            width: 280px;
+            border-radius: 4px;
+            box-shadow: 0 0 25px rgba(255, 107, 0, 0.15);
+            font-size: 12px;
+            pointer-events: none;
+        }
+
+        #hud h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #ff6b00;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #333;
+            text-shadow: 0 0 10px rgba(255, 107, 0, 0.5);
+        }
+
+        .section-title {
+            font-family: 'Orbitron', sans-serif;
+            color: #ff6b00;
+            font-size: 0.55rem;
+            margin-top: 12px;
+            margin-bottom: 6px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 4px 0;
+            padding: 2px 0;
+        }
+
+        .data-row span:first-child {
+            color: #666;
+        }
+
+        .val {
+            font-weight: bold;
+            color: #fff;
+            font-family: 'Share Tech Mono', monospace;
+        }
+
+        .val.safe { color: #00ff88; }
+        .val.warning { color: #ffaa00; }
+        .val.danger { color: #ff3333; animation: blink 0.5s infinite; }
+
+        /* Badges - Restyled */
+        .badge-container {
+            position: absolute;
+            top: 15px;
+            right: 250px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .badge {
+            padding: 8px 14px;
+            border-radius: 4px;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            font-size: 0.55rem;
+            letter-spacing: 1px;
+            background: rgba(10, 10, 10, 0.9);
+            border: 1px solid #333;
+            color: #444;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+        }
+
+        .badge.active-sos {
+            background: linear-gradient(135deg, #ff00ff, #cc00cc);
+            color: #fff;
+            border-color: #ff00ff;
+            box-shadow: 0 0 20px rgba(255, 0, 255, 0.6);
+            animation: pulse 0.5s infinite;
+        }
+        .badge.active-man {
+            background: linear-gradient(135deg, #ffaa00, #ff8800);
+            color: #000;
+            border-color: #ffaa00;
+            box-shadow: 0 0 15px rgba(255, 170, 0, 0.5);
+        }
+        .badge.active-safe {
+            background: linear-gradient(135deg, #00ff88, #00cc66);
+            color: #000;
+            border-color: #00ff88;
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
+        }
+        .badge.active-danger {
+            background: linear-gradient(135deg, #ff3333, #cc0000);
+            color: #fff;
+            border-color: #ff3333;
+            box-shadow: 0 0 20px rgba(255, 51, 51, 0.6);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes blink { 50% { opacity: 0.4; } }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+
+        /* Status Orb - Restyled */
+        #status-orb {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 30px;
+            height: 30px;
+            z-index: 10;
+            border-radius: 50%;
+            background: #333;
+            border: 3px solid #444;
+            transition: all 0.5s ease;
+        }
+
+        /* Minimap Container */
+        #minimap-container {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 220px;
+            height: 220px;
+            background: rgba(10, 10, 10, 0.95);
+            border: 2px solid #ff6b00;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: 0 0 25px rgba(255, 107, 0, 0.3);
+            z-index: 10;
+        }
+
+        .minimap-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 6px 10px;
+            background: linear-gradient(180deg, rgba(255, 107, 0, 0.2) 0%, transparent 100%);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.55rem;
+            color: #ff6b00;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            z-index: 2;
+        }
+
+        #minimap-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .minimap-footer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 5px 10px;
+            background: linear-gradient(0deg, rgba(0, 0, 0, 0.9) 0%, transparent 100%);
+            font-size: 0.6rem;
+            color: #888;
+            display: flex;
+            justify-content: space-between;
+            z-index: 2;
+        }
+
+        /* --- RIGHT PANEL (GRAPHS) --- */
+        #right-panel {
+            width: 38%;
+            max-width: 480px;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+            background: linear-gradient(180deg, #0a0806 0%, #080604 100%);
+            height: 100vh;
+            overflow-y: auto;
+            border-left: 1px solid #ff6b0022;
+        }
+
+        #right-panel::-webkit-scrollbar { width: 4px; }
+        #right-panel::-webkit-scrollbar-thumb { background: #ff6b0044; border-radius: 2px; }
+        #right-panel::-webkit-scrollbar-track { background: #111; }
+
+        .charts-header {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.65rem;
+            color: #ff6b00;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #333;
+        }
+
+        .chart-box {
+            flex-shrink: 0;
+            height: 130px;
+            background: rgba(15, 12, 10, 0.9);
+            border: 1px solid #222;
+            border-left: 3px solid #ff6b00;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            padding: 8px 10px;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+        }
+
+        .chart-box:hover {
+            border-color: #ff6b00;
+            box-shadow: 0 0 15px rgba(255, 107, 0, 0.1);
+        }
+
+        .chart-box h2 {
+            margin: 0 0 5px 0;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.5rem;
+            color: #ff6b00;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+
+        /* Connection Status */
+        #connection-status {
+            position: absolute;
+            bottom: 20px;
+            right: 250px;
+            padding: 8px 14px;
+            background: rgba(10, 10, 10, 0.9);
+            border: 1px solid #333;
+            border-radius: 4px;
+            font-size: 0.6rem;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 10;
+        }
+
+        .connection-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #333;
+            transition: all 0.3s ease;
+        }
+
+        .connection-dot.connected {
+            background: #00ff88;
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.8);
+        }
+
+        .connection-dot.error {
+            background: #ff3333;
+            box-shadow: 0 0 10px rgba(255, 51, 51, 0.8);
+        }
+
+        /* Crosshair */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) translate(-110px, 0);
+            width: 24px;
+            height: 24px;
+            pointer-events: none;
+            z-index: 5;
+            opacity: 0.3;
+        }
+
+        #crosshair::before,
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            background: #ff6b00;
+        }
+
+        #crosshair::before {
+            width: 2px;
+            height: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        #crosshair::after {
+            width: 100%;
+            height: 2px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+        <div class="loading-title">SIH Operator System</div>
+        <div class="loading-bar-container">
+            <div class="loading-bar" id="loading-bar"></div>
+        </div>
+        <div class="loading-text" id="loading-text">Initializing...</div>
+    </div>
+
+    <!-- LEFT: 3D & DATA -->
+    <div id="left-panel">
+        <div id="hud">
+            <h1>Operator HUD</h1>
+
+            <div class="section-title">Motion & Position</div>
+            <div class="data-row"><span>Orientation</span> <span id="ori-txt" class="val">0 0 0</span></div>
+            <div class="data-row"><span>Position</span> <span id="pos-txt" class="val">0.0 0.0 0.0</span></div>
+
+            <div class="section-title">Vitals (MAX30105)</div>
+            <div class="data-row"><span>Heart Rate</span> <span id="hr-txt" class="val">-- bpm</span></div>
+            <div class="data-row"><span>SpO2</span> <span id="spo2-txt" class="val">-- %</span></div>
+
+            <div class="section-title">Hazards</div>
+            <div class="data-row"><span>Methane (CH4)</span> <span id="ch4-txt" class="val">0 ppm</span></div>
+            <div class="data-row"><span>CO (MQ-7)</span> <span id="co-txt" class="val">0 raw</span></div>
+
+            <div class="section-title">System</div>
+            <div class="data-row"><span>Battery</span> <span id="bat-txt" class="val">0.00 V</span></div>
+            <div class="data-row"><span>State</span> <span id="state-txt" class="val">INIT</span></div>
+        </div>
+
+        <div class="badge-container">
+            <div id="badge-sos" class="badge">SOS Active</div>
+            <div id="badge-man" class="badge">Manual Override</div>
+            <div id="badge-helmet" class="badge">Helmet Secure</div>
+            <div id="badge-co" class="badge">CO Warning</div>
+        </div>
+
+        <!-- Minimap -->
+        <div id="minimap-container">
+            <div class="minimap-header">Position Track</div>
+            <canvas id="minimap-canvas" width="440" height="440"></canvas>
+            <div class="minimap-footer">
+                <span id="coord-display">X: 0.0 | Z: 0.0</span>
+                <span id="velocity-display">V: 0.0</span>
+            </div>
+        </div>
+
+        <div id="status-orb"></div>
+
+        <div id="connection-status">
+            <div class="connection-dot" id="conn-dot"></div>
+            <span id="conn-text">Connecting...</span>
+        </div>
+
+        <div id="crosshair"></div>
+        <div id="three-container"></div>
+    </div>
+
+    <!-- RIGHT: GRAPHS -->
+    <div id="right-panel">
+        <div class="charts-header">Real-Time Telemetry</div>
+        <div class="chart-box"><h2>Heart Rate (BPM)</h2><div style="flex:1;position:relative;"><canvas id="hrChart"></canvas></div></div>
+        <div class="chart-box"><h2>Acceleration (G)</h2><div style="flex:1;position:relative;"><canvas id="accChart"></canvas></div></div>
+        <div class="chart-box"><h2>Gyroscope (DPS)</h2><div style="flex:1;position:relative;"><canvas id="gyroChart"></canvas></div></div>
+        <div class="chart-box"><h2>CO Levels (MQ-7)</h2><div style="flex:1;position:relative;"><canvas id="coChart"></canvas></div></div>
+    </div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Loading animation
+        let loadProgress = 0;
+        function updateLoading(progress, text) {
+            loadProgress = progress;
+            document.getElementById('loading-bar').style.width = progress + '%';
+            document.getElementById('loading-text').textContent = text;
+        }
+
+        updateLoading(10, 'Initializing Three.js...');
+
+        // --- THREE.JS SETUP ---
+        const container = document.getElementById('three-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0806);
+        scene.fog = new THREE.FogExp2(0x0a0806, 0.04); // Subtle mine fog
+
+        const camera = new THREE.PerspectiveCamera(50, container.clientWidth/container.clientHeight, 0.1, 100);
+        camera.position.set(4, 3, 5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        container.appendChild(renderer.domElement);
+
+        updateLoading(25, 'Setting up controls...');
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Lighting - Brighter for better visibility
+        scene.add(new THREE.AmbientLight(0xffeedd, 0.6)); // Warm bright ambient
+
+        // Main overhead light
+        const pl = new THREE.PointLight(0xffaa66, 2.5, 30);
+        pl.position.set(0, 3, 0);
+        pl.castShadow = true;
+        scene.add(pl);
+
+        // Additional fill lights
+        const fillLight1 = new THREE.PointLight(0xffcc88, 1.5, 20);
+        fillLight1.position.set(-3, 2, -2);
+        scene.add(fillLight1);
+
+        const fillLight2 = new THREE.PointLight(0xffcc88, 1.5, 20);
+        fillLight2.position.set(3, 2, 2);
+        scene.add(fillLight2);
+
+        // Hemisphere light for natural fill
+        const hemiLight = new THREE.HemisphereLight(0xffeebb, 0x444422, 0.8);
+        scene.add(hemiLight);
+
+        updateLoading(40, 'Creating mine environment...');
+
+        const boxSize = 5;
+        const floorY = -1.5;
+
+        // --- TEXTURES ---
+        function createRockTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            // Brighter coal mine wall base (brownish-grey rock)
+            ctx.fillStyle = '#4a4540';
+            ctx.fillRect(0, 0, 512, 512);
+
+            // Rock texture with varied colors
+            for (let i = 0; i < 2500; i++) {
+                const x = Math.random() * 512;
+                const y = Math.random() * 512;
+                const size = Math.random() * 5 + 1;
+                const brightness = Math.random() * 60 + 40;
+                const brownTint = Math.random() * 20;
+                ctx.fillStyle = `rgba(${brightness + brownTint}, ${brightness + brownTint * 0.7}, ${brightness}, 0.6)`;
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Coal seams (darker streaks)
+            for (let i = 0; i < 8; i++) {
+                let x = Math.random() * 512;
+                let y = Math.random() * 512;
+                ctx.strokeStyle = 'rgba(20, 18, 15, 0.7)';
+                ctx.lineWidth = Math.random() * 6 + 2;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                for (let j = 0; j < 5; j++) {
+                    x += Math.random() * 100 - 50;
+                    y += Math.random() * 60 - 30;
+                    ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+
+            // Rock cracks for detail
+            for (let i = 0; i < 15; i++) {
+                let x = Math.random() * 512;
+                let y = Math.random() * 512;
+                ctx.strokeStyle = 'rgba(30, 25, 20, 0.4)';
+                ctx.lineWidth = Math.random() * 2 + 0.5;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                for (let j = 0; j < 3; j++) {
+                    x += Math.random() * 40 - 20;
+                    y += Math.random() * 40 - 20;
+                    ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(2, 2);
+            return texture;
+        }
+
+        function createWoodTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#4a3828';
+            ctx.fillRect(0, 0, 256, 256);
+
+            // Wood grain
+            for (let i = 0; i < 30; i++) {
+                ctx.strokeStyle = `rgba(30, 20, 10, ${Math.random() * 0.4 + 0.2})`;
+                ctx.lineWidth = Math.random() * 2 + 1;
+                ctx.beginPath();
+                ctx.moveTo(0, i * 8 + Math.random() * 4);
+                ctx.lineTo(256, i * 8 + Math.random() * 4);
+                ctx.stroke();
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }
+
+        const rockTexture = createRockTexture();
+        const woodTexture = createWoodTexture();
+
+        // Materials - Brighter for visibility
+        const wallMat = new THREE.MeshStandardMaterial({
+            map: rockTexture,
+            roughness: 0.85,
+            metalness: 0.05,
+            color: 0x6a6560, // Brighter
+            side: THREE.BackSide
+        });
+
+        const floorMat = new THREE.MeshStandardMaterial({
+            map: rockTexture,
+            roughness: 0.8,
+            metalness: 0.1,
+            color: 0x5a5550 // Brighter floor
+        });
+
+        const woodMat = new THREE.MeshStandardMaterial({
+            map: woodTexture,
+            roughness: 0.7,
+            metalness: 0.1,
+            color: 0x8a6a50 // Warmer, brighter wood
+        });
+
+        const metalMat = new THREE.MeshStandardMaterial({
+            color: 0x6a6565,
+            roughness: 0.3,
+            metalness: 0.9
+        });
+
+        // --- MINE TUNNEL (inverted box) ---
+        const tunnelGeo = new THREE.BoxGeometry(boxSize, boxSize * 0.7, boxSize);
+        const tunnel = new THREE.Mesh(tunnelGeo, wallMat);
+        tunnel.position.y = floorY + boxSize * 0.35;
+        scene.add(tunnel);
+
+        // Floor
+        const floorGeo = new THREE.PlaneGeometry(boxSize, boxSize);
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = floorY;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // --- WOODEN SUPPORT BEAMS ---
+        function createSupportBeam(x, z) {
+            const beamGroup = new THREE.Group();
+
+            // Left post
+            const postGeo = new THREE.BoxGeometry(0.15, 2.2, 0.15);
+            const leftPost = new THREE.Mesh(postGeo, woodMat);
+            leftPost.position.set(-0.9, floorY + 1.1, 0);
+            leftPost.castShadow = true;
+            beamGroup.add(leftPost);
+
+            // Right post
+            const rightPost = new THREE.Mesh(postGeo, woodMat);
+            rightPost.position.set(0.9, floorY + 1.1, 0);
+            rightPost.castShadow = true;
+            beamGroup.add(rightPost);
+
+            // Top beam
+            const topBeamGeo = new THREE.BoxGeometry(2.1, 0.15, 0.15);
+            const topBeam = new THREE.Mesh(topBeamGeo, woodMat);
+            topBeam.position.set(0, floorY + 2.15, 0);
+            topBeam.castShadow = true;
+            beamGroup.add(topBeam);
+
+            beamGroup.position.set(x, 0, z);
+            return beamGroup;
+        }
+
+        // Add support beams
+        scene.add(createSupportBeam(0, -1.8));
+        scene.add(createSupportBeam(0, 0));
+        scene.add(createSupportBeam(0, 1.8));
+
+        // --- MINE CART RAILS ---
+        const railLength = boxSize - 0.5;
+        const railGeo = new THREE.BoxGeometry(0.05, 0.05, railLength);
+
+        const leftRail = new THREE.Mesh(railGeo, metalMat);
+        leftRail.position.set(-0.3, floorY + 0.025, 0);
+        scene.add(leftRail);
+
+        const rightRail = new THREE.Mesh(railGeo, metalMat);
+        rightRail.position.set(0.3, floorY + 0.025, 0);
+        scene.add(rightRail);
+
+        // Rail ties
+        const tieGeo = new THREE.BoxGeometry(0.9, 0.04, 0.08);
+        for (let z = -railLength/2 + 0.3; z < railLength/2; z += 0.4) {
+            const tie = new THREE.Mesh(tieGeo, woodMat);
+            tie.position.set(0, floorY + 0.02, z);
+            scene.add(tie);
+        }
+
+        // --- MINE LANTERNS (on walls) - Brighter ---
+        function createLantern(x, y, z, rotY = 0) {
+            const lanternGroup = new THREE.Group();
+
+            // Lantern cage
+            const cageGeo = new THREE.CylinderGeometry(0.08, 0.1, 0.2, 8);
+            const cageMat = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, metalness: 0.9, roughness: 0.2 });
+            const cage = new THREE.Mesh(cageGeo, cageMat);
+            lanternGroup.add(cage);
+
+            // Glowing bulb
+            const glowGeo = new THREE.SphereGeometry(0.06, 12, 12);
+            const glowMat = new THREE.MeshBasicMaterial({ color: 0xffdd88 });
+            const glow = new THREE.Mesh(glowGeo, glowMat);
+            glow.position.y = 0.02;
+            lanternGroup.add(glow);
+
+            // Bright point light
+            const light = new THREE.PointLight(0xffcc66, 2.5, 8);
+            light.position.y = 0.02;
+            lanternGroup.add(light);
+
+            lanternGroup.position.set(x, y, z);
+            lanternGroup.rotation.y = rotY;
+            return lanternGroup;
+        }
+
+        // More lanterns for better lighting
+        scene.add(createLantern(-2.3, floorY + 1.5, -1.5));
+        scene.add(createLantern(-2.3, floorY + 1.5, 1.5));
+        scene.add(createLantern(2.3, floorY + 1.5, -1));
+        scene.add(createLantern(2.3, floorY + 1.5, 1));
+        scene.add(createLantern(0, floorY + 2.0, 0)); // Center ceiling lantern
+
+        // --- PICKAXE on wall ---
+        const pickGroup = new THREE.Group();
+        const pickHandleGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.6, 8);
+        const pickHandle = new THREE.Mesh(pickHandleGeo, woodMat);
+        pickHandle.rotation.z = Math.PI / 4;
+        pickGroup.add(pickHandle);
+
+        const pickHeadGeo = new THREE.BoxGeometry(0.25, 0.04, 0.04);
+        const pickHead = new THREE.Mesh(pickHeadGeo, metalMat);
+        pickHead.position.set(0.18, 0.18, 0);
+        pickGroup.add(pickHead);
+
+        pickGroup.position.set(-2.35, floorY + 0.8, 1.5);
+        scene.add(pickGroup);
+
+        updateLoading(55, 'Building mine worker...');
+
+        // --- MINE WORKER FIGURE ---
+        const group = new THREE.Group();
+
+        // Skin and clothing colors
+        const skinMat = new THREE.MeshStandardMaterial({ color: 0xd4a574, roughness: 0.8 });
+        const clothMat = new THREE.MeshStandardMaterial({ color: 0x2a4a6a, roughness: 0.9 }); // Blue coveralls
+        const vestMat = new THREE.MeshStandardMaterial({ color: 0xff6600, roughness: 0.7 }); // Orange safety vest
+        const helmetMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, roughness: 0.4, metalness: 0.3 }); // Yellow helmet
+        const bootMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 });
+
+        // Body/Torso
+        const torsoGeo = new THREE.BoxGeometry(0.22, 0.28, 0.12);
+        const torso = new THREE.Mesh(torsoGeo, clothMat);
+        torso.position.y = 0.24;
+        torso.castShadow = true;
+        group.add(torso);
+
+        // Safety vest overlay
+        const vestGeo = new THREE.BoxGeometry(0.24, 0.26, 0.13);
+        const vest = new THREE.Mesh(vestGeo, vestMat);
+        vest.position.y = 0.25;
+        vest.castShadow = true;
+        group.add(vest);
+
+        // Head
+        const headGeo = new THREE.SphereGeometry(0.08, 16, 12);
+        const head = new THREE.Mesh(headGeo, skinMat);
+        head.position.y = 0.48;
+        head.scale.y = 1.1;
+        head.castShadow = true;
+        group.add(head);
+
+        // Hard hat/Helmet
+        const helmetGeo = new THREE.SphereGeometry(0.095, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+        const helmet = new THREE.Mesh(helmetGeo, helmetMat);
+        helmet.position.y = 0.52;
+        helmet.castShadow = true;
+        group.add(helmet);
+
+        // Helmet brim
+        const brimGeo = new THREE.CylinderGeometry(0.11, 0.11, 0.015, 16);
+        const brim = new THREE.Mesh(brimGeo, helmetMat);
+        brim.position.y = 0.48;
+        group.add(brim);
+
+        // Headlamp on helmet
+        const lampGeo = new THREE.BoxGeometry(0.04, 0.03, 0.02);
+        const lampMat = new THREE.MeshBasicMaterial({ color: 0xffffaa });
+        const lamp = new THREE.Mesh(lampGeo, lampMat);
+        lamp.position.set(0, 0.5, 0.09);
+        group.add(lamp);
+
+        // Headlamp light
+        const headLight = new THREE.SpotLight(0xffffcc, 1, 3, Math.PI / 6, 0.5);
+        headLight.position.set(0, 0.5, 0.1);
+        headLight.target.position.set(0, 0.3, 1);
+        group.add(headLight);
+        group.add(headLight.target);
+
+        // Arms
+        const armGeo = new THREE.BoxGeometry(0.06, 0.22, 0.06);
+        const leftArm = new THREE.Mesh(armGeo, clothMat);
+        leftArm.position.set(-0.14, 0.22, 0);
+        leftArm.rotation.z = 0.15;
+        leftArm.castShadow = true;
+        group.add(leftArm);
+
+        const rightArm = new THREE.Mesh(armGeo, clothMat);
+        rightArm.position.set(0.14, 0.22, 0);
+        rightArm.rotation.z = -0.15;
+        rightArm.castShadow = true;
+        group.add(rightArm);
+
+        // Hands
+        const handGeo = new THREE.SphereGeometry(0.035, 8, 8);
+        const leftHand = new THREE.Mesh(handGeo, skinMat);
+        leftHand.position.set(-0.16, 0.1, 0);
+        group.add(leftHand);
+
+        const rightHand = new THREE.Mesh(handGeo, skinMat);
+        rightHand.position.set(0.16, 0.1, 0);
+        group.add(rightHand);
+
+        // Legs
+        const legGeo = new THREE.BoxGeometry(0.08, 0.22, 0.08);
+        const leftLeg = new THREE.Mesh(legGeo, clothMat);
+        leftLeg.position.set(-0.06, -0.01, 0);
+        leftLeg.castShadow = true;
+        group.add(leftLeg);
+
+        const rightLeg = new THREE.Mesh(legGeo, clothMat);
+        rightLeg.position.set(0.06, -0.01, 0);
+        rightLeg.castShadow = true;
+        group.add(rightLeg);
+
+        // Boots
+        const bootGeo = new THREE.BoxGeometry(0.09, 0.06, 0.12);
+        const leftBoot = new THREE.Mesh(bootGeo, bootMat);
+        leftBoot.position.set(-0.06, -0.15, 0.02);
+        leftBoot.castShadow = true;
+        group.add(leftBoot);
+
+        const rightBoot = new THREE.Mesh(bootGeo, bootMat);
+        rightBoot.position.set(0.06, -0.15, 0.02);
+        rightBoot.castShadow = true;
+        group.add(rightBoot);
+
+        // Position worker on floor
+        group.position.y = floorY + 0.18;
+        scene.add(group);
+
+        // Reference for state color changes
+        const workerVest = vest;
+
+        updateLoading(70, 'Creating particle trail...');
+
+        // Trail - Enhanced
+        const trailSize = 80;
+        const trailPos = new Float32Array(trailSize * 3);
+        const trailColors = new Float32Array(trailSize * 3);
+
+        for (let i = 0; i < trailSize; i++) {
+            const t = i / trailSize;
+            trailColors[i * 3] = 1.0;     // R
+            trailColors[i * 3 + 1] = 0.4 * t; // G
+            trailColors[i * 3 + 2] = 0;     // B
+        }
+
+        const trailGeo = new THREE.BufferGeometry();
+        trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
+        trailGeo.setAttribute('color', new THREE.BufferAttribute(trailColors, 3));
+
+        const trail = new THREE.Points(trailGeo, new THREE.PointsMaterial({
+            size: 0.06,
+            transparent: true,
+            opacity: 0.7,
+            vertexColors: true,
+            blending: THREE.AdditiveBlending
+        }));
+        scene.add(trail);
+
+
+        updateLoading(85, 'Initializing charts...');
+
+        let pos = new THREE.Vector3(), vel = new THREE.Vector3(), targetQuat = new THREE.Quaternion();
+        const gravity = 1.0;
+
+        // --- MINIMAP ---
+        const minimapCanvas = document.getElementById('minimap-canvas');
+        const minimapCtx = minimapCanvas.getContext('2d');
+        const trailHistory = [];
+        const maxTrailHistory = 200;
+
+        function drawMinimap() {
+            const w = minimapCanvas.width;
+            const h = minimapCanvas.height;
+            const cx = w / 2;
+            const cy = h / 2;
+            const scale = 45;
+
+            // Background - dark rock color
+            minimapCtx.fillStyle = '#1a1816';
+            minimapCtx.fillRect(0, 0, w, h);
+
+            // Draw mine tunnel area (lighter brown)
+            const tunnelWidth = 1.8 * scale;
+            const tunnelHeight = 1.8 * scale;
+            minimapCtx.fillStyle = '#3a3530';
+            minimapCtx.fillRect(cx - tunnelWidth, cy - tunnelHeight, tunnelWidth * 2, tunnelHeight * 2);
+
+            // Draw rock walls (borders)
+            minimapCtx.strokeStyle = '#5a5550';
+            minimapCtx.lineWidth = 8;
+            minimapCtx.strokeRect(cx - tunnelWidth, cy - tunnelHeight, tunnelWidth * 2, tunnelHeight * 2);
+
+            // Draw wooden support beams (cross sections)
+            minimapCtx.fillStyle = '#6a5040';
+            const beamPositions = [-1.8, 0, 1.8];
+            beamPositions.forEach(z => {
+                const by = cy + z * scale;
+                // Left post
+                minimapCtx.fillRect(cx - tunnelWidth + 5, by - 4, 12, 8);
+                // Right post
+                minimapCtx.fillRect(cx + tunnelWidth - 17, by - 4, 12, 8);
+                // Top beam connection line
+                minimapCtx.strokeStyle = '#5a4030';
+                minimapCtx.lineWidth = 3;
+                minimapCtx.beginPath();
+                minimapCtx.moveTo(cx - tunnelWidth + 11, by);
+                minimapCtx.lineTo(cx + tunnelWidth - 11, by);
+                minimapCtx.stroke();
+            });
+
+            // Draw mine cart rails
+            minimapCtx.strokeStyle = '#888888';
+            minimapCtx.lineWidth = 3;
+            // Left rail
+            minimapCtx.beginPath();
+            minimapCtx.moveTo(cx - 12, cy - tunnelHeight + 10);
+            minimapCtx.lineTo(cx - 12, cy + tunnelHeight - 10);
+            minimapCtx.stroke();
+            // Right rail
+            minimapCtx.beginPath();
+            minimapCtx.moveTo(cx + 12, cy - tunnelHeight + 10);
+            minimapCtx.lineTo(cx + 12, cy + tunnelHeight - 10);
+            minimapCtx.stroke();
+
+            // Rail ties
+            minimapCtx.strokeStyle = '#5a4030';
+            minimapCtx.lineWidth = 2;
+            for (let z = -tunnelHeight + 20; z < tunnelHeight; z += 18) {
+                minimapCtx.beginPath();
+                minimapCtx.moveTo(cx - 20, cy + z);
+                minimapCtx.lineTo(cx + 20, cy + z);
+                minimapCtx.stroke();
+            }
+
+            // Draw lantern positions (yellow dots)
+            minimapCtx.fillStyle = '#ffcc44';
+            const lanternPos = [
+                [-tunnelWidth + 10, -1.5 * scale],
+                [-tunnelWidth + 10, 1.5 * scale],
+                [tunnelWidth - 10, -1 * scale],
+                [tunnelWidth - 10, 1 * scale],
+            ];
+            lanternPos.forEach(([lx, ly]) => {
+                minimapCtx.beginPath();
+                minimapCtx.arc(cx + lx, cy + ly, 5, 0, Math.PI * 2);
+                minimapCtx.fill();
+                // Glow effect
+                const glow = minimapCtx.createRadialGradient(cx + lx, cy + ly, 0, cx + lx, cy + ly, 15);
+                glow.addColorStop(0, 'rgba(255, 200, 100, 0.3)');
+                glow.addColorStop(1, 'rgba(255, 200, 100, 0)');
+                minimapCtx.fillStyle = glow;
+                minimapCtx.beginPath();
+                minimapCtx.arc(cx + lx, cy + ly, 15, 0, Math.PI * 2);
+                minimapCtx.fill();
+            });
+
+            // Trail history
+            if (trailHistory.length > 1) {
+                minimapCtx.beginPath();
+                minimapCtx.strokeStyle = '#ff6b00';
+                minimapCtx.lineWidth = 3;
+                minimapCtx.lineCap = 'round';
+                minimapCtx.lineJoin = 'round';
+                for (let i = 0; i < trailHistory.length; i++) {
+                    const p = trailHistory[i];
+                    const mx = cx + p.x * scale;
+                    const my = cy + p.z * scale;
+                    if (i === 0) {
+                        minimapCtx.moveTo(mx, my);
+                    } else {
+                        minimapCtx.lineTo(mx, my);
+                    }
+                }
+                minimapCtx.stroke();
+
+                // Trail dots
+                for (let i = 0; i < trailHistory.length; i += 5) {
+                    const p = trailHistory[i];
+                    const mx = cx + p.x * scale;
+                    const my = cy + p.z * scale;
+                    const alpha = (i / trailHistory.length) * 0.8;
+                    minimapCtx.beginPath();
+                    minimapCtx.arc(mx, my, 3, 0, Math.PI * 2);
+                    minimapCtx.fillStyle = `rgba(255, 107, 0, ${alpha})`;
+                    minimapCtx.fill();
+                }
+            }
+
+            // Current position marker
+            const px = cx + pos.x * scale;
+            const pz = cy + pos.z * scale;
+
+            // Worker glow
+            const workerGlow = minimapCtx.createRadialGradient(px, pz, 0, px, pz, 20);
+            workerGlow.addColorStop(0, 'rgba(0, 255, 136, 0.5)');
+            workerGlow.addColorStop(1, 'rgba(0, 255, 136, 0)');
+            minimapCtx.fillStyle = workerGlow;
+            minimapCtx.beginPath();
+            minimapCtx.arc(px, pz, 20, 0, Math.PI * 2);
+            minimapCtx.fill();
+
+            // Worker icon (small person shape)
+            minimapCtx.fillStyle = '#00ff88';
+            // Head
+            minimapCtx.beginPath();
+            minimapCtx.arc(px, pz - 5, 4, 0, Math.PI * 2);
+            minimapCtx.fill();
+            // Body
+            minimapCtx.fillRect(px - 3, pz - 1, 6, 8);
+
+            // Helmet (yellow top)
+            minimapCtx.fillStyle = '#ffcc00';
+            minimapCtx.beginPath();
+            minimapCtx.arc(px, pz - 6, 5, Math.PI, 0);
+            minimapCtx.fill();
+
+            // Direction indicator
+            const euler = new THREE.Euler();
+            euler.setFromQuaternion(targetQuat, 'YXZ');
+            const angle = -euler.y;
+
+            minimapCtx.save();
+            minimapCtx.translate(px, pz);
+            minimapCtx.rotate(angle);
+
+            // Direction arrow
+            minimapCtx.fillStyle = '#00ff88';
+            minimapCtx.beginPath();
+            minimapCtx.moveTo(0, -18);
+            minimapCtx.lineTo(-5, -10);
+            minimapCtx.lineTo(5, -10);
+            minimapCtx.closePath();
+            minimapCtx.fill();
+
+            minimapCtx.restore();
+
+            // Border
+            minimapCtx.strokeStyle = '#ff6b00';
+            minimapCtx.lineWidth = 2;
+            minimapCtx.strokeRect(2, 2, w - 4, h - 4);
+
+            // Update footer
+            document.getElementById('coord-display').textContent =
+                `X: ${pos.x.toFixed(1)} | Z: ${pos.z.toFixed(1)}`;
+            document.getElementById('velocity-display').textContent =
+                `V: ${vel.length().toFixed(2)}`;
+        }
+
+        // --- CHARTS ---
+        const maxPts = 50;
+        const labels = Array(maxPts).fill('');
+        const chartOpts = {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { enabled: false }
+            },
+            scales: {
+                x: { display: false },
+                y: {
+                    grid: { color: '#ff6b0015' },
+                    ticks: { color: '#666', font: { size: 9, family: 'Share Tech Mono' } }
+                }
+            }
+        };
+
+        const createChart = (id, color) => new Chart(document.getElementById(id), {
+            type: 'line',
+            data: { labels, datasets: [{ data: [], borderColor: color, borderWidth: 1.5, pointRadius: 0, tension: 0.2 }] },
+            options: chartOpts
+        });
+
+        const hrChart = createChart('hrChart', '#ff3366');
+        const coChart = createChart('coChart', '#ffaa00');
+
+        // Multi-line charts for IMU
+        const accChart = new Chart(document.getElementById('accChart'), {
+            type: 'line',
+            data: { labels, datasets: [
+                { borderColor: '#ff3333', borderWidth: 1.5, pointRadius: 0, data: [], tension: 0.2 },
+                { borderColor: '#00ff88', borderWidth: 1.5, pointRadius: 0, data: [], tension: 0.2 },
+                { borderColor: '#3388ff', borderWidth: 1.5, pointRadius: 0, data: [], tension: 0.2 }
+            ]},
+            options: chartOpts
+        });
+
+        const gyroChart = new Chart(document.getElementById('gyroChart'), {
+            type: 'line',
+            data: { labels, datasets: [
+                { borderColor: '#ff6600', borderWidth: 1.5, pointRadius: 0, data: [], tension: 0.2 },
+                { borderColor: '#00ffff', borderWidth: 1.5, pointRadius: 0, data: [], tension: 0.2 },
+                { borderColor: '#ff00ff', borderWidth: 1.5, pointRadius: 0, data: [], tension: 0.2 }
+            ]},
+            options: chartOpts
+        });
+
+        function updateC(c, v) {
+            if (Array.isArray(v)) {
+                v.forEach((val, i) => {
+                    c.data.datasets[i].data.push(val);
+                    if (c.data.datasets[i].data.length > maxPts) c.data.datasets[i].data.shift();
+                });
+            } else {
+                c.data.datasets[0].data.push(v);
+                if (c.data.datasets[0].data.length > maxPts) c.data.datasets[0].data.shift();
+            }
+            c.update();
+        }
+
+        updateLoading(95, 'Connecting to data source...');
+
+        // --- CONNECTION STATUS ---
+        let isConnected = false;
+        let lastDataTime = 0;
+
+        function updateConnectionStatus(connected, error = false) {
+            const dot = document.getElementById('conn-dot');
+            const text = document.getElementById('conn-text');
+
+            dot.classList.remove('connected', 'error');
+
+            if (connected) {
+                dot.classList.add('connected');
+                text.textContent = 'Connected';
+            } else if (error) {
+                dot.classList.add('error');
+                text.textContent = 'Connection Error';
+            } else {
+                text.textContent = 'Connecting...';
+            }
+        }
+
+        // --- FETCH LOOP ---
+        async function fetchData() {
+            try {
+                const res = await fetch("http://localhost:8000/data");
+                const data = await res.json();
+
+                isConnected = true;
+                lastDataTime = Date.now();
+                updateConnectionStatus(true);
+
+                // 1. Update Physics (Dead Reckoning + Madgwick Rot)
+                const { roll, pitch, yaw } = data.orientation;
+                targetQuat.setFromEuler(new THREE.Euler(pitch*(Math.PI/180), -yaw*(Math.PI/180), roll*(Math.PI/180), 'YXZ'));
+
+                const { x_g: ax, z_g: az, y_g: ay } = data.accel;
+                let accX = -ax, accY = az - gravity, accZ = ay;
+                if (Math.abs(accX) < 0.1) accX = 0;
+                if (Math.abs(accY) < 0.1) accY = 0;
+                if (Math.abs(accZ) < 0.1) accZ = 0;
+                vel.add(new THREE.Vector3(accX, 0, accZ).multiplyScalar(0.05)); // No Y movement - stay on floor
+                pos.add(vel);
+                vel.multiplyScalar(0.92);
+                pos.lerp(new THREE.Vector3(0, 0, 0), 0.02);
+                const L = 1.8; // Stay within tunnel
+                if (Math.abs(pos.x) > L) vel.x *= -0.8;
+                if (Math.abs(pos.z) > L) vel.z *= -0.8;
+                pos.x = Math.max(-L, Math.min(L, pos.x));
+                pos.z = Math.max(-L, Math.min(L, pos.z));
+                pos.y = 0; // Keep on floor level
+
+                group.quaternion.slerp(targetQuat, 0.2);
+                group.position.x = pos.x;
+                group.position.z = pos.z;
+                // Y is set by floorY + offset in initial setup
+
+                // Update trail history for minimap
+                trailHistory.push({ x: pos.x, y: pos.y, z: pos.z });
+                if (trailHistory.length > maxTrailHistory) trailHistory.shift();
+
+                // 2. HUD Updates
+                document.getElementById('ori-txt').innerText = `${roll.toFixed(0)}° ${pitch.toFixed(0)}° ${yaw.toFixed(0)}°`;
+                document.getElementById('pos-txt').innerText = `${pos.x.toFixed(1)} ${pos.y.toFixed(1)} ${pos.z.toFixed(1)}`;
+
+                // Vitals
+                const hr = data.health.hr_bpm;
+                const spo2 = data.health.spo2_pct;
+                const hrEl = document.getElementById('hr-txt');
+                const spo2El = document.getElementById('spo2-txt');
+
+                hrEl.innerText = (hr > 0 ? hr.toFixed(1) : "--") + " bpm";
+                hrEl.className = 'val' + (hr > 100 ? ' warning' : hr > 120 ? ' danger' : '');
+
+                spo2El.innerText = (spo2 > 0 ? spo2.toFixed(1) : "--") + " %";
+                spo2El.className = 'val' + (spo2 < 95 ? ' warning' : spo2 < 90 ? ' danger' : spo2 > 0 ? ' safe' : '');
+
+                // Hazards
+                const ch4 = data.gas.methane_ppm;
+                const co = data.gas.co_raw;
+                const ch4El = document.getElementById('ch4-txt');
+                const coEl = document.getElementById('co-txt');
+
+                ch4El.innerText = ch4.toFixed(0) + " ppm";
+                ch4El.className = 'val' + (ch4 > 1000 ? ' danger' : ch4 > 500 ? ' warning' : '');
+
+                coEl.innerText = co;
+                coEl.className = 'val' + (co > 2000 ? ' danger' : co > 1000 ? ' warning' : '');
+
+                // System
+                document.getElementById('bat-txt').innerText = data.battery_v.toFixed(2) + " V";
+
+                // State
+                let st = "UNKNOWN", c = "#444";
+                switch (data.system_state) {
+                    case 1: st = "NORMAL"; c = "#00ff88"; break;
+                    case 2: st = "METHANE"; c = "#3388ff"; break;
+                    case 3: st = "LOW BAT"; c = "#ff3333"; break;
+                    case 4: st = "CRITICAL"; c = "#ff6600"; break;
+                    case 5: st = "SOS"; c = "#ff00ff"; break;
+                    case 6: st = "SILENT"; c = "#888888"; break;
+                }
+                document.getElementById('state-txt').innerText = st;
+                document.getElementById('state-txt').style.color = c;
+                document.getElementById('status-orb').style.background = c;
+                document.getElementById('status-orb').style.boxShadow = `0 0 20px ${c}`;
+                // Update worker vest color based on state
+                workerVest.material.emissive.set(c);
+                workerVest.material.emissiveIntensity = 0.3;
+
+                // Badges
+                const tog = (id, on, cls) => {
+                    const el = document.getElementById(id);
+                    el.classList.remove('active-sos', 'active-man', 'active-safe', 'active-danger');
+                    if (on) el.classList.add(cls);
+                };
+                tog('badge-sos', data.flags.sos, 'active-sos');
+                tog('badge-man', data.flags.manual, 'active-man');
+                tog('badge-helmet', data.fsr.is_wearing_helmet, 'active-safe');
+                tog('badge-co', data.gas.co_alert || co > 2000, 'active-danger');
+
+                // Charts
+                updateC(hrChart, hr);
+                updateC(coChart, co);
+                updateC(accChart, [data.accel.x_g, data.accel.y_g, data.accel.z_g]);
+                updateC(gyroChart, [data.gyro.x_dps, data.gyro.y_dps, data.gyro.z_dps]);
+
+            } catch (e) {
+                updateConnectionStatus(false, true);
+            }
+        }
+
+        setInterval(fetchData, 80);
+
+        // Animation Loop
+        let time = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.016;
+
+            // Trail update - follows worker on floor
+            const arr = trail.geometry.attributes.position.array;
+            for (let i = 0; i < (trailSize - 1) * 3; i++) arr[i] = arr[i + 3];
+            const idx = (trailSize - 1) * 3;
+            arr[idx] = pos.x;
+            arr[idx + 1] = floorY + 0.05; // Trail on floor
+            arr[idx + 2] = pos.z;
+            trail.geometry.attributes.position.needsUpdate = true;
+
+
+
+            // Light flicker
+            pl.intensity = 1.5 + Math.sin(time * 5) * 0.1;
+
+            // Update minimap
+            drawMinimap();
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Hide loading screen and start
+        setTimeout(() => {
+            updateLoading(100, 'Ready!');
+            setTimeout(() => {
+                document.getElementById('loading-screen').classList.add('hidden');
+            }, 500);
+        }, 500);
+
+        animate();
+
+        window.onresize = () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        };
+    </script>
+</body>
+</html>

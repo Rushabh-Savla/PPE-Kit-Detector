@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VR Mine Simulation - Realistic Underground Navigation</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: 'Share Tech Mono', monospace;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            cursor: crosshair;
+        }
+        
+        canvas {
+            display: block;
+        }
+        
+        /* Loading Screen */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            transition: opacity 0.8s ease-out;
+        }
+        
+        #loading-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .loading-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem;
+            font-weight: 900;
+            color: #ff6b00;
+            text-transform: uppercase;
+            letter-spacing: 6px;
+            margin-bottom: 40px;
+            text-shadow: 0 0 30px rgba(255, 107, 0, 0.5);
+        }
+        
+        .loading-bar-container {
+            width: 280px;
+            height: 4px;
+            background: #222;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .loading-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #ff6b00, #ffaa00);
+            width: 0%;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 20px rgba(255, 107, 0, 0.8);
+        }
+        
+        .loading-text {
+            margin-top: 20px;
+            color: #666;
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+        }
+        
+        /* HUD Overlay */
+        #hud {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+        
+        /* Minimap */
+        #minimap-container {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 220px;
+            height: 220px;
+            background: rgba(10, 10, 10, 0.95);
+            border: 2px solid #ff6b00;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: 0 0 25px rgba(255, 107, 0, 0.3);
+        }
+        
+        #minimap-canvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .minimap-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 6px 10px;
+            background: linear-gradient(180deg, rgba(255, 107, 0, 0.2) 0%, transparent 100%);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.6rem;
+            color: #ff6b00;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        
+        .minimap-footer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 5px 10px;
+            background: linear-gradient(0deg, rgba(0, 0, 0, 0.8) 0%, transparent 100%);
+            font-size: 0.6rem;
+            color: #888;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        /* Status Panel */
+        #status-panel {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            padding: 12px 16px;
+            background: rgba(10, 10, 10, 0.9);
+            border: 1px solid #333;
+            border-left: 3px solid #ff6b00;
+            border-radius: 4px;
+        }
+        
+        .status-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.6rem;
+            color: #ff6b00;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 5px 0;
+            font-size: 0.7rem;
+        }
+        
+        .status-label {
+            color: #666;
+            margin-right: 15px;
+        }
+        
+        .status-value {
+            color: #fff;
+            font-family: 'Share Tech Mono', monospace;
+        }
+        
+        .status-value.warning { color: #ffaa00; }
+        .status-value.danger { color: #ff3333; }
+        .status-value.safe { color: #00ff88; }
+        
+        /* Controls Help */
+        #controls-help {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            padding: 12px;
+            background: rgba(10, 10, 10, 0.85);
+            border: 1px solid #333;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            color: #888;
+        }
+        
+        .controls-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.55rem;
+            color: #ff6b00;
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+        
+        .control-item {
+            display: flex;
+            align-items: center;
+            margin: 4px 0;
+        }
+        
+        .key {
+            background: #222;
+            border: 1px solid #444;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-right: 8px;
+            font-size: 0.6rem;
+            color: #fff;
+            min-width: 20px;
+            text-align: center;
+        }
+        
+        /* Flashlight indicator */
+        #flashlight-indicator {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            padding: 8px 12px;
+            background: rgba(10, 10, 10, 0.9);
+            border: 1px solid #333;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            color: #888;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .flashlight-icon {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #333;
+            transition: all 0.3s ease;
+        }
+        
+        .flashlight-icon.on {
+            background: #ffff00;
+            box-shadow: 0 0 12px rgba(255, 255, 0, 0.8);
+        }
+        
+        /* Crosshair */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            pointer-events: none;
+        }
+        
+        #crosshair::before,
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.4);
+        }
+        
+        #crosshair::before {
+            width: 2px;
+            height: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        
+        #crosshair::after {
+            width: 100%;
+            height: 2px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        /* Depth bar */
+        #depth-indicator {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 30px;
+            height: 200px;
+            background: rgba(10, 10, 10, 0.9);
+            border: 1px solid #333;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 8px 4px;
+        }
+        
+        .depth-label {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.45rem;
+            color: #ff6b00;
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            letter-spacing: 1px;
+        }
+        
+        .depth-bar {
+            flex: 1;
+            width: 6px;
+            background: #222;
+            border-radius: 3px;
+            margin: 8px 0;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .depth-fill {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(0deg, #ff3333 0%, #ffaa00 50%, #00ff88 100%);
+            transition: height 0.3s ease;
+        }
+        
+        .depth-value {
+            font-size: 0.6rem;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+        <div class="loading-title">Mine Simulation</div>
+        <div class="loading-bar-container">
+            <div class="loading-bar" id="loading-bar"></div>
+        </div>
+        <div class="loading-text" id="loading-text">Initializing...</div>
+    </div>
+    
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container"></div>
+    
+    <!-- HUD Overlay -->
+    <div id="hud">
+        <!-- Minimap -->
+        <div id="minimap-container">
+            <div class="minimap-header">Navigation</div>
+            <canvas id="minimap-canvas" width="440" height="440"></canvas>
+            <div class="minimap-footer">
+                <span id="coord-display">X: 0 | Z: 0</span>
+                <span id="heading-display">0°</span>
+            </div>
+        </div>
+        
+        <!-- Status Panel -->
+        <div id="status-panel">
+            <div class="status-title">Environment</div>
+            <div class="status-row">
+                <span class="status-label">O₂</span>
+                <span class="status-value safe" id="oxygen-level">21.4%</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">CH₄</span>
+                <span class="status-value safe" id="methane-level">0.2%</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Temp</span>
+                <span class="status-value" id="temperature">24°C</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Humidity</span>
+                <span class="status-value" id="humidity">78%</span>
+            </div>
+        </div>
+        
+        <!-- Depth Indicator -->
+        <div id="depth-indicator">
+            <span class="depth-label">DEPTH</span>
+            <div class="depth-bar">
+                <div class="depth-fill" id="depth-fill" style="height: 30%;"></div>
+            </div>
+            <span class="depth-value" id="depth-value">-150m</span>
+        </div>
+        
+        <!-- Controls Help -->
+        <div id="controls-help">
+            <div class="controls-title">Controls</div>
+            <div class="control-item"><span class="key">W</span> Forward</div>
+            <div class="control-item"><span class="key">S</span> Back</div>
+            <div class="control-item"><span class="key">A</span> Left</div>
+            <div class="control-item"><span class="key">D</span> Right</div>
+            <div class="control-item"><span class="key">F</span> Light</div>
+            <div class="control-item"><span class="key">↑↓</span> Look</div>
+        </div>
+        
+        <!-- Flashlight Indicator -->
+        <div id="flashlight-indicator">
+            <div class="flashlight-icon on" id="flashlight-icon"></div>
+            <span>Light [F]</span>
+        </div>
+        
+        <!-- Crosshair -->
+        <div id="crosshair"></div>
+    </div>
+
+    <!-- Three.js - Using ES Module version for better compatibility -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    
+    <script type="module">
+        import * as THREE from 'three';
+        
+        // ============================================
+        // REALISTIC MINE SIMULATION
+        // ============================================
+        
+        class RealisticMineSim {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                
+                this.mineMap = [];
+                this.mineSize = 50;
+                this.cellSize = 6;
+                
+                // Player state
+                this.moveForward = false;
+                this.moveBackward = false;
+                this.moveLeft = false;
+                this.moveRight = false;
+                this.velocity = new THREE.Vector3();
+                this.direction = new THREE.Vector3();
+                this.flashlightOn = true;
+                
+                // Camera rotation
+                this.yaw = 0;
+                this.pitch = 0;
+                this.isMouseDown = false;
+                this.lastMouseX = 0;
+                this.lastMouseY = 0;
+                
+                // Lighting
+                this.flashlight = null;
+                this.mineLights = [];
+                
+                // Particles
+                this.dustParticles = null;
+                this.particleVelocities = [];
+                
+                // Minimap
+                this.minimapCanvas = null;
+                this.minimapCtx = null;
+                this.minimapBackground = null;
+                
+                // Textures
+                this.textures = {};
+                
+                this.clock = new THREE.Clock();
+                
+                this.init();
+            }
+            
+            async init() {
+                this.updateLoading(5, 'Creating scene...');
+                this.setupScene();
+                
+                this.updateLoading(15, 'Generating textures...');
+                this.loadTextures();
+                
+                this.updateLoading(30, 'Generating mine...');
+                this.generateMineLayout();
+                
+                this.updateLoading(50, 'Building geometry...');
+                this.buildMineGeometry();
+                
+                this.updateLoading(70, 'Setting up lighting...');
+                this.setupLighting();
+                
+                this.updateLoading(80, 'Creating atmosphere...');
+                this.setupAtmosphere();
+                
+                this.updateLoading(90, 'Initializing controls...');
+                this.setupControls();
+                this.setupMinimap();
+                
+                this.updateLoading(100, 'Ready!');
+                
+                setTimeout(() => {
+                    document.getElementById('loading-screen').classList.add('hidden');
+                }, 500);
+                
+                this.animate();
+            }
+            
+            updateLoading(percent, text) {
+                document.getElementById('loading-bar').style.width = percent + '%';
+                document.getElementById('loading-text').textContent = text;
+            }
+            
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x050505);
+                this.scene.fog = new THREE.FogExp2(0x0a0806, 0.012);
+                
+                this.camera = new THREE.PerspectiveCamera(
+                    75,
+                    window.innerWidth / window.innerHeight,
+                    0.1,
+                    500
+                );
+                this.camera.position.set(0, 1.7, 0);
+                
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+                this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                this.renderer.toneMappingExposure = 1.5;
+                
+                document.getElementById('canvas-container').appendChild(this.renderer.domElement);
+            }
+            
+            loadTextures() {
+                this.textures.rock = this.createRockTexture();
+                this.textures.rockNormal = this.createRockNormalMap();
+                this.textures.floor = this.createFloorTexture();
+                
+                Object.values(this.textures).forEach(tex => {
+                    tex.wrapS = THREE.RepeatWrapping;
+                    tex.wrapT = THREE.RepeatWrapping;
+                });
+            }
+            
+            createRockTexture() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+                
+                // Base gradient
+                const gradient = ctx.createRadialGradient(256, 256, 0, 256, 256, 350);
+                gradient.addColorStop(0, '#2a2520');
+                gradient.addColorStop(1, '#1a1815');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, 512, 512);
+                
+                // Add grain
+                for (let i = 0; i < 3000; i++) {
+                    const x = Math.random() * 512;
+                    const y = Math.random() * 512;
+                    const size = Math.random() * 6 + 1;
+                    const brightness = Math.random() * 40 + 20;
+                    ctx.fillStyle = `rgba(${brightness + 10}, ${brightness + 5}, ${brightness}, 0.6)`;
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                // Mineral veins
+                for (let i = 0; i < 15; i++) {
+                    let x = Math.random() * 512;
+                    let y = Math.random() * 512;
+                    ctx.strokeStyle = `rgba(${120 + Math.random() * 40}, ${110 + Math.random() * 30}, ${90}, 0.2)`;
+                    ctx.lineWidth = Math.random() * 3 + 1;
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    for (let j = 0; j < 5; j++) {
+                        x += Math.random() * 60 - 30;
+                        y += Math.random() * 60 - 30;
+                        ctx.lineTo(x, y);
+                    }
+                    ctx.stroke();
+                }
+                
+                // Cracks
+                for (let i = 0; i < 25; i++) {
+                    let x = Math.random() * 512;
+                    let y = Math.random() * 512;
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+                    ctx.lineWidth = Math.random() * 2 + 0.5;
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    for (let j = 0; j < 4; j++) {
+                        x += Math.random() * 40 - 20;
+                        y += Math.random() * 40 - 20;
+                        ctx.lineTo(x, y);
+                    }
+                    ctx.stroke();
+                }
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.repeat.set(2, 2);
+                return texture;
+            }
+            
+            createRockNormalMap() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+                
+                ctx.fillStyle = '#8080ff';
+                ctx.fillRect(0, 0, 512, 512);
+                
+                for (let i = 0; i < 300; i++) {
+                    const x = Math.random() * 512;
+                    const y = Math.random() * 512;
+                    const size = Math.random() * 15 + 5;
+                    const gradient = ctx.createRadialGradient(x, y, 0, x, y, size);
+                    gradient.addColorStop(0, '#a0a0ff');
+                    gradient.addColorStop(0.5, '#8080ff');
+                    gradient.addColorStop(1, '#6060ff');
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.repeat.set(2, 2);
+                return texture;
+            }
+            
+            createFloorTexture() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+                
+                ctx.fillStyle = '#3a3530';
+                ctx.fillRect(0, 0, 512, 512);
+                
+                for (let i = 0; i < 2000; i++) {
+                    const x = Math.random() * 512;
+                    const y = Math.random() * 512;
+                    const size = Math.random() * 4 + 1;
+                    const brightness = Math.random() * 30 + 40;
+                    ctx.fillStyle = `rgba(${brightness + 5}, ${brightness}, ${brightness - 5}, 0.5)`;
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                // Wet spots
+                for (let i = 0; i < 8; i++) {
+                    const x = Math.random() * 512;
+                    const y = Math.random() * 512;
+                    const size = Math.random() * 40 + 15;
+                    ctx.fillStyle = 'rgba(20, 18, 15, 0.35)';
+                    ctx.beginPath();
+                    ctx.ellipse(x, y, size, size * 0.6, Math.random() * Math.PI, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.repeat.set(3, 3);
+                return texture;
+            }
+            
+            generateMineLayout() {
+                const size = this.mineSize;
+                
+                for (let x = 0; x < size; x++) {
+                    this.mineMap[x] = [];
+                    for (let z = 0; z < size; z++) {
+                        this.mineMap[x][z] = 0;
+                    }
+                }
+                
+                const mid = Math.floor(size / 2);
+                
+                // Main tunnel
+                for (let z = 3; z < size - 3; z++) {
+                    this.mineMap[mid][z] = 1;
+                    this.mineMap[mid - 1][z] = 1;
+                    this.mineMap[mid + 1][z] = 1;
+                }
+                
+                // Branches
+                const branches = [8, 18, 28, 38];
+                branches.forEach(z => {
+                    for (let x = 4; x < mid; x++) {
+                        this.mineMap[x][z] = 2;
+                        if (z > 0) this.mineMap[x][z - 1] = 2;
+                    }
+                    for (let x = mid + 1; x < size - 4; x++) {
+                        this.mineMap[x][z] = 2;
+                        if (z > 0) this.mineMap[x][z - 1] = 2;
+                    }
+                });
+                
+                // Chambers
+                this.createChamber(6, 6, 14, 14);
+                this.createChamber(size - 15, 30, size - 6, 42);
+            }
+            
+            createChamber(x1, z1, x2, z2) {
+                for (let x = x1; x <= x2; x++) {
+                    for (let z = z1; z <= z2; z++) {
+                        if ((x - x1) % 4 === 2 && (z - z1) % 4 === 2) {
+                            this.mineMap[x][z] = 0;
+                        } else {
+                            this.mineMap[x][z] = 3;
+                        }
+                    }
+                }
+            }
+            
+            buildMineGeometry() {
+                const size = this.mineSize;
+                const cs = this.cellSize;
+                
+                const wallMat = new THREE.MeshStandardMaterial({
+                    map: this.textures.rock,
+                    normalMap: this.textures.rockNormal,
+                    roughness: 0.9,
+                    metalness: 0.1,
+                    color: 0x555050
+                });
+                
+                const floorMat = new THREE.MeshStandardMaterial({
+                    map: this.textures.floor,
+                    roughness: 0.85,
+                    metalness: 0.05,
+                    color: 0x4a4540
+                });
+                
+                const ceilMat = new THREE.MeshStandardMaterial({
+                    map: this.textures.rock,
+                    roughness: 0.95,
+                    metalness: 0.05,
+                    color: 0x3a3530
+                });
+                
+                const mineGroup = new THREE.Group();
+                
+                for (let x = 1; x < size - 1; x++) {
+                    for (let z = 1; z < size - 1; z++) {
+                        const type = this.mineMap[x][z];
+                        if (type === 0) continue;
+                        
+                        const posX = (x - size / 2) * cs;
+                        const posZ = (z - size / 2) * cs;
+                        const height = type === 1 ? 4.5 : type === 2 ? 3.5 : 5;
+                        
+                        // Floor
+                        const floor = new THREE.Mesh(
+                            new THREE.PlaneGeometry(cs, cs),
+                            floorMat
+                        );
+                        floor.rotation.x = -Math.PI / 2;
+                        floor.position.set(posX, 0, posZ);
+                        floor.receiveShadow = true;
+                        mineGroup.add(floor);
+                        
+                        // Ceiling
+                        const ceil = new THREE.Mesh(
+                            new THREE.PlaneGeometry(cs, cs),
+                            ceilMat
+                        );
+                        ceil.rotation.x = Math.PI / 2;
+                        ceil.position.set(posX, height, posZ);
+                        mineGroup.add(ceil);
+                        
+                        // Walls
+                        const dirs = [
+                            { dx: 1, dz: 0, rotY: -Math.PI/2, offX: cs/2, offZ: 0 },
+                            { dx: -1, dz: 0, rotY: Math.PI/2, offX: -cs/2, offZ: 0 },
+                            { dx: 0, dz: 1, rotY: Math.PI, offX: 0, offZ: cs/2 },
+                            { dx: 0, dz: -1, rotY: 0, offX: 0, offZ: -cs/2 }
+                        ];
+                        
+                        dirs.forEach(d => {
+                            if (this.mineMap[x + d.dx][z + d.dz] === 0) {
+                                const wall = new THREE.Mesh(
+                                    new THREE.PlaneGeometry(cs, height),
+                                    wallMat
+                                );
+                                wall.rotation.y = d.rotY;
+                                wall.position.set(posX + d.offX, height / 2, posZ + d.offZ);
+                                wall.receiveShadow = true;
+                                wall.castShadow = true;
+                                mineGroup.add(wall);
+                            }
+                        });
+                        
+                        // Support beams
+                        if (type === 1 && z % 6 === 0) {
+                            this.addSupport(mineGroup, posX, posZ, height);
+                        }
+                    }
+                }
+                
+                // Rails
+                this.addRails(mineGroup);
+                
+                // Mine cart
+                this.addMineCart(mineGroup, 0, 0.3, -20);
+                
+                this.scene.add(mineGroup);
+            }
+            
+            addSupport(group, x, z, height) {
+                const mat = new THREE.MeshStandardMaterial({
+                    color: 0x4a4a4a,
+                    roughness: 0.5,
+                    metalness: 0.9
+                });
+                
+                const postGeo = new THREE.BoxGeometry(0.25, height, 0.25);
+                const beamGeo = new THREE.BoxGeometry(this.cellSize * 2.5, 0.2, 0.25);
+                
+                const left = new THREE.Mesh(postGeo, mat);
+                left.position.set(x - this.cellSize, height / 2, z);
+                left.castShadow = true;
+                group.add(left);
+                
+                const right = new THREE.Mesh(postGeo, mat);
+                right.position.set(x + this.cellSize, height / 2, z);
+                right.castShadow = true;
+                group.add(right);
+                
+                const beam = new THREE.Mesh(beamGeo, mat);
+                beam.position.set(x, height - 0.15, z);
+                beam.castShadow = true;
+                group.add(beam);
+            }
+            
+            addRails(group) {
+                const mat = new THREE.MeshStandardMaterial({
+                    color: 0x3a3535,
+                    roughness: 0.4,
+                    metalness: 0.9
+                });
+                
+                const length = this.mineSize * this.cellSize - 40;
+                const railGeo = new THREE.BoxGeometry(0.08, 0.1, length);
+                
+                const left = new THREE.Mesh(railGeo, mat);
+                left.position.set(-0.5, 0.05, 0);
+                group.add(left);
+                
+                const right = new THREE.Mesh(railGeo, mat);
+                right.position.set(0.5, 0.05, 0);
+                group.add(right);
+                
+                // Ties
+                const tieMat = new THREE.MeshStandardMaterial({ color: 0x3a2820, roughness: 0.9 });
+                const tieGeo = new THREE.BoxGeometry(1.8, 0.08, 0.15);
+                
+                for (let z = -length/2 + 10; z < length/2 - 10; z += 1.5) {
+                    const tie = new THREE.Mesh(tieGeo, tieMat);
+                    tie.position.set(0, 0.02, z);
+                    group.add(tie);
+                }
+            }
+            
+            addMineCart(group, x, y, z) {
+                const cartGroup = new THREE.Group();
+                
+                const bodyMat = new THREE.MeshStandardMaterial({
+                    color: 0x4a4a4a,
+                    roughness: 0.6,
+                    metalness: 0.8
+                });
+                
+                const body = new THREE.Mesh(
+                    new THREE.BoxGeometry(1.2, 0.6, 1.8),
+                    bodyMat
+                );
+                body.position.y = 0.3;
+                body.castShadow = true;
+                cartGroup.add(body);
+                
+                // Wheels
+                const wheelGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.1, 12);
+                const wheelMat = new THREE.MeshStandardMaterial({
+                    color: 0x333333,
+                    roughness: 0.3,
+                    metalness: 0.9
+                });
+                
+                [[-0.5, 0.15, -0.6], [0.5, 0.15, -0.6], [-0.5, 0.15, 0.6], [0.5, 0.15, 0.6]].forEach(pos => {
+                    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+                    wheel.rotation.z = Math.PI / 2;
+                    wheel.position.set(...pos);
+                    cartGroup.add(wheel);
+                });
+                
+                // Coal
+                const oreMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 1 });
+                for (let i = 0; i < 15; i++) {
+                    const ore = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.1, 6, 4),
+                        oreMat
+                    );
+                    ore.position.set(
+                        (Math.random() - 0.5) * 0.8,
+                        0.5 + Math.random() * 0.2,
+                        (Math.random() - 0.5) * 1.2
+                    );
+                    ore.scale.setScalar(0.6 + Math.random() * 0.4);
+                    cartGroup.add(ore);
+                }
+                
+                cartGroup.position.set(x, y, z);
+                group.add(cartGroup);
+            }
+            
+            setupLighting() {
+                // Ambient - brighter base lighting
+                const ambient = new THREE.AmbientLight(0x2a2520, 0.5);
+                this.scene.add(ambient);
+                
+                // Hemisphere light for better fill
+                const hemi = new THREE.HemisphereLight(0x444444, 0x222222, 0.3);
+                this.scene.add(hemi);
+                
+                // Flashlight - MUCH brighter and wider
+                this.flashlight = new THREE.SpotLight(0xffffff, 50, 80, Math.PI / 4, 0.2, 1);
+                this.flashlight.castShadow = true;
+                this.flashlight.shadow.mapSize.set(512, 512);
+                this.camera.add(this.flashlight);
+                this.flashlight.position.set(0, 0, 0);
+                this.flashlight.target.position.set(0, 0, -1);
+                this.camera.add(this.flashlight.target);
+                
+                // Add a secondary point light on camera for extra fill
+                this.cameraLight = new THREE.PointLight(0xffffee, 2, 25, 1);
+                this.cameraLight.position.set(0, 0, 0);
+                this.camera.add(this.cameraLight);
+                
+                this.scene.add(this.camera);
+                
+                // Mine lights - brighter
+                const halfSize = (this.mineSize / 2 - 3) * this.cellSize;
+                
+                for (let z = -halfSize; z < halfSize; z += 18) {
+                    [-this.cellSize - 0.5, this.cellSize + 0.5].forEach(x => {
+                        // Bulb
+                        const bulbMat = new THREE.MeshStandardMaterial({
+                            color: 0xffaa44,
+                            emissive: 0xffcc66,
+                            emissiveIntensity: 3
+                        });
+                        const bulb = new THREE.Mesh(
+                            new THREE.SphereGeometry(0.12, 12, 8),
+                            bulbMat
+                        );
+                        bulb.position.set(x, 3.5, z);
+                        this.scene.add(bulb);
+                        
+                        // Light - much brighter
+                        const light = new THREE.PointLight(0xffaa44, 3, 25, 1.5);
+                        light.position.set(x, 3.4, z);
+                        this.scene.add(light);
+                        
+                        this.mineLights.push({ light, bulb, baseIntensity: 3 });
+                    });
+                }
+            }
+            
+            setupAtmosphere() {
+                // Dust particles
+                const count = 2000;
+                const positions = new Float32Array(count * 3);
+                const spread = this.mineSize * this.cellSize;
+                
+                for (let i = 0; i < count; i++) {
+                    positions[i * 3] = (Math.random() - 0.5) * spread;
+                    positions[i * 3 + 1] = Math.random() * 4;
+                    positions[i * 3 + 2] = (Math.random() - 0.5) * spread;
+                    
+                    this.particleVelocities.push({
+                        x: (Math.random() - 0.5) * 0.01,
+                        y: (Math.random() - 0.5) * 0.005,
+                        z: (Math.random() - 0.5) * 0.01
+                    });
+                }
+                
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                
+                const material = new THREE.PointsMaterial({
+                    color: 0x998866,
+                    size: 0.05,
+                    transparent: true,
+                    opacity: 0.35,
+                    sizeAttenuation: true,
+                    blending: THREE.AdditiveBlending
+                });
+                
+                this.dustParticles = new THREE.Points(geometry, material);
+                this.scene.add(this.dustParticles);
+            }
+            
+            setupControls() {
+                // Keyboard
+                document.addEventListener('keydown', e => this.onKeyDown(e));
+                document.addEventListener('keyup', e => this.onKeyUp(e));
+                
+                // Mouse look
+                const container = document.getElementById('canvas-container');
+                
+                container.addEventListener('mousedown', e => {
+                    this.isMouseDown = true;
+                    this.lastMouseX = e.clientX;
+                    this.lastMouseY = e.clientY;
+                });
+                
+                document.addEventListener('mouseup', () => {
+                    this.isMouseDown = false;
+                });
+                
+                document.addEventListener('mousemove', e => {
+                    if (this.isMouseDown) {
+                        const deltaX = e.clientX - this.lastMouseX;
+                        const deltaY = e.clientY - this.lastMouseY;
+                        
+                        this.yaw -= deltaX * 0.003;
+                        this.pitch -= deltaY * 0.003;
+                        this.pitch = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, this.pitch));
+                        
+                        this.lastMouseX = e.clientX;
+                        this.lastMouseY = e.clientY;
+                    }
+                });
+                
+                // Touch controls
+                container.addEventListener('touchstart', e => {
+                    this.isMouseDown = true;
+                    this.lastMouseX = e.touches[0].clientX;
+                    this.lastMouseY = e.touches[0].clientY;
+                }, { passive: true });
+                
+                container.addEventListener('touchend', () => {
+                    this.isMouseDown = false;
+                }, { passive: true });
+                
+                container.addEventListener('touchmove', e => {
+                    if (this.isMouseDown) {
+                        const deltaX = e.touches[0].clientX - this.lastMouseX;
+                        const deltaY = e.touches[0].clientY - this.lastMouseY;
+                        
+                        this.yaw -= deltaX * 0.005;
+                        this.pitch -= deltaY * 0.005;
+                        this.pitch = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, this.pitch));
+                        
+                        this.lastMouseX = e.touches[0].clientX;
+                        this.lastMouseY = e.touches[0].clientY;
+                    }
+                }, { passive: true });
+                
+                // Arrow keys for look
+                window.addEventListener('resize', () => this.onResize());
+            }
+            
+            onKeyDown(e) {
+                switch (e.code) {
+                    case 'KeyW': case 'ArrowUp': this.moveForward = true; break;
+                    case 'KeyS': case 'ArrowDown': this.moveBackward = true; break;
+                    case 'KeyA': this.moveLeft = true; break;
+                    case 'KeyD': this.moveRight = true; break;
+                    case 'ArrowLeft': this.yaw += 0.05; break;
+                    case 'ArrowRight': this.yaw -= 0.05; break;
+                    case 'KeyF': this.toggleFlashlight(); break;
+                }
+            }
+            
+            onKeyUp(e) {
+                switch (e.code) {
+                    case 'KeyW': case 'ArrowUp': this.moveForward = false; break;
+                    case 'KeyS': case 'ArrowDown': this.moveBackward = false; break;
+                    case 'KeyA': this.moveLeft = false; break;
+                    case 'KeyD': this.moveRight = false; break;
+                }
+            }
+            
+            toggleFlashlight() {
+                this.flashlightOn = !this.flashlightOn;
+                this.flashlight.visible = this.flashlightOn;
+                this.cameraLight.visible = this.flashlightOn;
+                
+                const icon = document.getElementById('flashlight-icon');
+                icon.classList.toggle('on', this.flashlightOn);
+            }
+            
+            onResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+            
+            setupMinimap() {
+                this.minimapCanvas = document.getElementById('minimap-canvas');
+                this.minimapCtx = this.minimapCanvas.getContext('2d');
+                this.drawMinimapBackground();
+            }
+            
+            drawMinimapBackground() {
+                const ctx = this.minimapCtx;
+                const w = this.minimapCanvas.width;
+                const h = this.minimapCanvas.height;
+                const cellSize = w / this.mineSize;
+                
+                ctx.fillStyle = '#0a0a0a';
+                ctx.fillRect(0, 0, w, h);
+                
+                for (let x = 0; x < this.mineSize; x++) {
+                    for (let z = 0; z < this.mineSize; z++) {
+                        const type = this.mineMap[x][z];
+                        if (type !== 0) {
+                            ctx.fillStyle = type === 1 ? '#ff6b00' : type === 2 ? '#aa4500' : '#663300';
+                            ctx.fillRect(x * cellSize, z * cellSize, cellSize + 0.5, cellSize + 0.5);
+                        }
+                    }
+                }
+                
+                // Grid
+                ctx.strokeStyle = 'rgba(255, 107, 0, 0.1)';
+                ctx.lineWidth = 0.5;
+                for (let i = 0; i <= this.mineSize; i += 5) {
+                    ctx.beginPath();
+                    ctx.moveTo(i * cellSize, 0);
+                    ctx.lineTo(i * cellSize, h);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(0, i * cellSize);
+                    ctx.lineTo(w, i * cellSize);
+                    ctx.stroke();
+                }
+                
+                this.minimapBackground = ctx.getImageData(0, 0, w, h);
+            }
+            
+            updateMinimap() {
+                if (!this.minimapBackground) return;
+                
+                const ctx = this.minimapCtx;
+                const w = this.minimapCanvas.width;
+                const h = this.minimapCanvas.height;
+                
+                ctx.putImageData(this.minimapBackground, 0, 0);
+                
+                const pos = this.camera.position;
+                const gx = (pos.x / this.cellSize) + (this.mineSize / 2);
+                const gz = (pos.z / this.cellSize) + (this.mineSize / 2);
+                
+                const mx = gx * (w / this.mineSize);
+                const mz = gz * (h / this.mineSize);
+                
+                // Player
+                ctx.save();
+                ctx.translate(mx, mz);
+                ctx.rotate(-this.yaw);
+                
+                ctx.beginPath();
+                ctx.arc(0, 0, 6, 0, Math.PI * 2);
+                ctx.fillStyle = '#00ff88';
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(0, -12);
+                ctx.lineTo(-5, 0);
+                ctx.lineTo(5, 0);
+                ctx.closePath();
+                ctx.fillStyle = '#00ff88';
+                ctx.fill();
+                
+                // View cone
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(-25, -50);
+                ctx.lineTo(25, -50);
+                ctx.closePath();
+                ctx.fillStyle = 'rgba(0, 255, 136, 0.1)';
+                ctx.fill();
+                
+                ctx.restore();
+                
+                // Update HUD
+                document.getElementById('coord-display').textContent = 
+                    `X: ${Math.round(pos.x)} | Z: ${Math.round(pos.z)}`;
+                document.getElementById('heading-display').textContent = 
+                    `${Math.round((-this.yaw * 180 / Math.PI + 360) % 360)}°`;
+            }
+            
+            updatePlayer(delta) {
+                // Deceleration
+                this.velocity.x -= this.velocity.x * 10 * delta;
+                this.velocity.z -= this.velocity.z * 10 * delta;
+                
+                // Direction
+                this.direction.z = Number(this.moveForward) - Number(this.moveBackward);
+                this.direction.x = Number(this.moveRight) - Number(this.moveLeft);
+                this.direction.normalize();
+                
+                const speed = 25;
+                
+                if (this.moveForward || this.moveBackward) {
+                    this.velocity.z -= this.direction.z * speed * delta;
+                }
+                if (this.moveLeft || this.moveRight) {
+                    this.velocity.x -= this.direction.x * speed * delta;
+                }
+                
+                // Apply rotation
+                this.camera.rotation.order = 'YXZ';
+                this.camera.rotation.y = this.yaw;
+                this.camera.rotation.x = this.pitch;
+                
+                // Movement relative to camera direction
+                const oldPos = this.camera.position.clone();
+                
+                const forward = new THREE.Vector3(0, 0, -1);
+                forward.applyQuaternion(this.camera.quaternion);
+                forward.y = 0;
+                forward.normalize();
+                
+                const right = new THREE.Vector3(1, 0, 0);
+                right.applyQuaternion(this.camera.quaternion);
+                right.y = 0;
+                right.normalize();
+                
+                this.camera.position.addScaledVector(forward, -this.velocity.z * delta);
+                this.camera.position.addScaledVector(right, -this.velocity.x * delta);
+                
+                // Collision
+                const pos = this.camera.position;
+                const gx = Math.floor((pos.x / this.cellSize) + this.mineSize / 2);
+                const gz = Math.floor((pos.z / this.cellSize) + this.mineSize / 2);
+                
+                const isValid = (x, z) => {
+                    if (x < 0 || x >= this.mineSize || z < 0 || z >= this.mineSize) return false;
+                    return this.mineMap[x][z] !== 0;
+                };
+                
+                if (!isValid(gx, gz)) {
+                    this.camera.position.copy(oldPos);
+                    this.velocity.set(0, 0, 0);
+                }
+                
+                // Height & head bob
+                let targetY = 1.7;
+                if (this.moveForward || this.moveBackward || this.moveLeft || this.moveRight) {
+                    targetY += Math.sin(performance.now() * 0.008) * 0.025;
+                }
+                this.camera.position.y = targetY;
+            }
+            
+            updateEffects(time) {
+                // Light flicker
+                this.mineLights.forEach((l, i) => {
+                    const flicker = 1 + Math.sin(time * 3 + i * 0.5) * 0.03 + (Math.random() - 0.5) * 0.04;
+                    l.light.intensity = l.baseIntensity * flicker;
+                    l.bulb.material.emissiveIntensity = 2 * flicker;
+                });
+                
+                // Dust particles
+                if (this.dustParticles) {
+                    const positions = this.dustParticles.geometry.attributes.position.array;
+                    const spread = this.mineSize * this.cellSize / 2;
+                    
+                    for (let i = 0; i < positions.length / 3; i++) {
+                        const vel = this.particleVelocities[i];
+                        
+                        positions[i * 3] += vel.x + Math.sin(time + i * 0.1) * 0.002;
+                        positions[i * 3 + 1] += vel.y;
+                        positions[i * 3 + 2] += vel.z + Math.cos(time + i * 0.15) * 0.002;
+                        
+                        // Wrap
+                        if (positions[i * 3] > spread) positions[i * 3] = -spread;
+                        if (positions[i * 3] < -spread) positions[i * 3] = spread;
+                        if (positions[i * 3 + 1] > 4) positions[i * 3 + 1] = 0;
+                        if (positions[i * 3 + 1] < 0) positions[i * 3 + 1] = 4;
+                        if (positions[i * 3 + 2] > spread) positions[i * 3 + 2] = -spread;
+                        if (positions[i * 3 + 2] < -spread) positions[i * 3 + 2] = spread;
+                    }
+                    this.dustParticles.geometry.attributes.position.needsUpdate = true;
+                }
+                
+                // HUD updates
+                const depth = 150 + Math.abs(this.camera.position.z) * 0.5;
+                document.getElementById('depth-value').textContent = '-' + Math.round(depth) + 'm';
+                document.getElementById('depth-fill').style.height = Math.min(100, depth / 3) + '%';
+                
+                const temp = 24 + Math.sin(time * 0.1) * 1.5;
+                document.getElementById('temperature').textContent = temp.toFixed(1) + '°C';
+                
+                const humidity = 78 + Math.sin(time * 0.05) * 3;
+                document.getElementById('humidity').textContent = Math.round(humidity) + '%';
+                
+                const o2 = 21.4 - (depth - 150) * 0.001 + Math.sin(time * 0.2) * 0.1;
+                const o2El = document.getElementById('oxygen-level');
+                o2El.textContent = o2.toFixed(1) + '%';
+                o2El.className = 'status-value ' + (o2 > 20 ? 'safe' : o2 > 19 ? 'warning' : 'danger');
+                
+                const ch4 = 0.2 + Math.sin(time * 0.3) * 0.1;
+                const ch4El = document.getElementById('methane-level');
+                ch4El.textContent = ch4.toFixed(2) + '%';
+                ch4El.className = 'status-value ' + (ch4 < 0.5 ? 'safe' : ch4 < 1 ? 'warning' : 'danger');
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                const delta = this.clock.getDelta();
+                const time = performance.now() * 0.001;
+                
+                this.updatePlayer(delta);
+                this.updateMinimap();
+                this.updateEffects(time);
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+        
+        // Start
+        new RealisticMineSim();
+    </script>
+</body>
+</html>
